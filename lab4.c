@@ -85,6 +85,58 @@ static int mkdir_callback(const char* path, mode_t mode)
 }
 
 
+static int readdir_callback(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *fi) 
+{
+	(void) offset;
+	(void) fi;
+
+	filler(buf, ".", NULL, 0);
+	filler(buf, "..", NULL, 0);
+	lseek(dirsfd, startPos, SEEK_SET);
+	fsync(dirsfd);
+	while (read(dirsfd, &dir, sizeof(struct directory)) != 0) 
+	{
+		if (dir.isFree == 0) 
+		{
+			char s[600];
+			strcpy(s, path);
+			if (s[1] == '\0')
+				s[0] = '\0';
+			strcat(s, dir.name);
+			if (strcmp(s, dir.path) == 0)
+				filler(buf, dir.name + 1, NULL, 0);
+		}
+	}
+
+	return 0;
+}
+
+static int rmdir_callback(const char *path)
+{
+	lseek(dirsfd, startPos, SEEK_SET);
+	int curpos = 0;
+	while (read(dirsfd, &dir, sizeof(struct directory)) != 0) 
+	{
+		if (!dir.isFree && strncmp(dir.path, path, strlen(path)) == 0) 
+		{
+			dir.isFree =  1;
+			lseek(dirsfd, startPos + curpos * sizeof(struct directory), SEEK_SET);
+			write(dirsfd, &dir, sizeof(struct directory));
+		}
+		curpos++;
+	}
+	return 0;
+}
+
+static int open_callback(const char *path, struct fuse_file_info *fi) 
+{
+	return 0;
+}
+
+static int read_callback(const char *path, char *buf, size_t size, off_t offset, struct fuse_file_info *fi) 
+{
+	return 0;
+}
 
 static struct fuse_operations fuse_example_operations = 
 {
